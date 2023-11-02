@@ -30,7 +30,7 @@ while True:
     # Convert the video stream to gray image.
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Get find the aruco markers.
+    # Find the aruco markers.
     corners, ids, rejected = aruco.detectMarkers(
         gray, aruco_dict, parameters=aruco_parameters
     )
@@ -56,7 +56,7 @@ while True:
 
         # Get the enemy that is the closest.
         min_id, min_distances = min(enemyPixDist.items(), key=lambda item: item[1])
-        print(max_key)
+        print(min_id)
 
     cv2.imshow("ArUco Marker Detection", frame)
 
