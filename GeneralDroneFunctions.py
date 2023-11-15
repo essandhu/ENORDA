@@ -48,7 +48,7 @@ def ArmDrone(vehicle):
 
     print("Enabling GUIDED Mode for Copter")
     vehicle.mode = VehicleMode("GUIDED")  # Copter is armed in GUIDED mode
-    while vehicle.mode != "GUIDED":
+    while not vehicle.mode.name == "GUIDED":
         print("Drone is not in GUIDED Mode...")
         time.sleep(1)
     print("Drone is in GUIDED Mode")
