@@ -1,27 +1,28 @@
 # Import Open CV for Computer Vision
 import cv2
 import cv2.aruco as aruco
+import time 
 
 
 class GetEnemy:
-    # The dimensions of the camera
-    width = None
-    height = None
+    # # The dimensions of the camera
+    # width = None
+    # height = None
 
-    # The camera
-    cap = None
+    # # The camera
+    # cap = None
 
-    # The pixel dimensions of the camera
-    midX = None
-    midY = None
+    # # The pixel dimensions of the camera
+    # midX = None
+    # midY = None
 
-    # A list of our team's rovers
-    goodGuys = None
+    # # A list of our team's rovers
+    # goodGuys = None
 
+<<<<<<< Updated upstream:NewCode/GetEnemyPixCoords.py
     # The dictionary for the aruco markers
     aruco_dict = None
 
-    # aruco_parameters = cv2.aruco.DetectorParameters()
     aruco_parameters = aruco.DetectorParameters_create()
 
     # A dictionary of the pixel coordinates of each marker.
@@ -30,6 +31,10 @@ class GetEnemy:
     # The coordinates are stored in the following format to form the bounding box:
     # [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
     pixCoords = {}
+=======
+    # # The dictionary for the aruco markers
+    # aruco_dict = None
+>>>>>>> Stashed changes:NewCode/GetEnemyPixCoordsJetsonTest.py
 
     def __init__(self, camIndex=1, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50):
         # Start the video stream
@@ -49,6 +54,9 @@ class GetEnemy:
         # Set the aruco marker dictionary
         self.aruco_dict = aruco.getPredefinedDictionary(dictionary)
 
+        # Set the aruco parameters
+        self.aruco_parameters = aruco.DetectorParameters()
+
     # display will show the camera and mark all the aruco markers and label them with the ID.
     # this should only be used for testing.
     def display(self):
@@ -67,7 +75,7 @@ class GetEnemy:
                 gray, self.aruco_dict, parameters=self.aruco_parameters
             )
 
-            # Draw boxes around the enemies and display their ids.
+            # Draw boxes around the enemies and display their IDs.
             aruco.drawDetectedMarkers(frame, corners, ids)
             cv2.imshow("ArUco Marker Detection", frame)
 
@@ -151,11 +159,12 @@ class GetEnemy:
 
     # getVectorToClosestEnemy returns a boolean variable indicating if pixCoords was updated.
     # getVectorToClosestEnemy then returns the vector from the center of the camera to the center of the box in the for of a list containing x, y.
+    # getVectorToClosestEnemy then returns the distance from the center of the camera to the center of the box
     def getVectorToClosestEnemy(self):
         # get the ID of the closest enemy.
-        updated, enemyID, _ = self.getClosestEnemy()
+        updated, enemyID, enemyDist = self.getClosestEnemy()
         # return the boolean updated and the x, y values for the vector.
-        return updated, self.getVectorToMarker(enemyID)
+        return updated, self.getVectorToMarker(enemyID), enemyDist
 
     # pixDist returns the distance from the center of the camera to the center of the aruco box.
     def pixDist(self, corners):

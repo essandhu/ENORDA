@@ -1,7 +1,7 @@
 # Import Open CV for Computer Vision
 import cv2
 import cv2.aruco as aruco
-
+import numpy as np
 
 class GetEnemy:
     # The dimensions of the camera
@@ -21,8 +21,7 @@ class GetEnemy:
     # The dictionary for the aruco markers
     aruco_dict = None
 
-    # aruco_parameters = cv2.aruco.DetectorParameters()
-    aruco_parameters = aruco.DetectorParameters_create()
+    aruco_parameters = cv2.aruco.DetectorParameters()
 
     # A dictionary of the pixel coordinates of each marker.
     # The aruco marker id is the key
@@ -31,7 +30,16 @@ class GetEnemy:
     # [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
     pixCoords = {}
 
-    def __init__(self, camIndex=1, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50):
+    #This is the width of the aruco marker in meters.
+    markerWidth = None
+
+    cameraMatrix = np.array([[522.40309943, 0., 311.44490428], [0., 524.46457779, 239.11265117], [0., 0., 1.]])
+    
+    distortionCoef = np.array([[-0.10218976, 0.84197709, -0.00646081, 0.01162686, -0.28063381]])
+
+
+
+    def __init__(self, camIndex=0, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50, markerWidth = 0.0508):
         # Start the video stream
         self.cap = cv2.VideoCapture(camIndex)
 
@@ -48,6 +56,10 @@ class GetEnemy:
 
         # Set the aruco marker dictionary
         self.aruco_dict = aruco.getPredefinedDictionary(dictionary)
+        
+        #Set the width of the aruco marker
+        self.markerWidth = markerWidth
+
 
     # display will show the camera and mark all the aruco markers and label them with the ID.
     # this should only be used for testing.
@@ -70,6 +82,10 @@ class GetEnemy:
             # Draw boxes around the enemies and display their ids.
             aruco.drawDetectedMarkers(frame, corners, ids)
             cv2.imshow("ArUco Marker Detection", frame)
+            if ids is not None:
+                rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners, self.markerWidth, self.cameraMatrix, self.distortionCoef)
+                print("NEW!!!!!!!!!!!!!!!!!!!!!!!")
+                print(tvec)
 
             # Press escape to exit.
             if cv2.waitKey(1) & 0xFF == 27:
