@@ -21,7 +21,7 @@ class GetEnemy:
     # The dictionary for the aruco markers
     aruco_dict = None
 
-    aruco_parameters = cv2.aruco.DetectorParameters()
+    aruco_parameters = aruco.DetectorParameters_create()
 
     # A dictionary of the pixel coordinates of each marker.
     # The aruco marker id is the key
@@ -30,7 +30,7 @@ class GetEnemy:
     # [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
     pixCoords = {}
 
-    def __init__(self, camIndex=0, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50):
+    def __init__(self, camIndex=1, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50):
         # Start the video stream
         self.cap = cv2.VideoCapture(camIndex)
 

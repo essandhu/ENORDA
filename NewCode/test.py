@@ -4,7 +4,7 @@ import cv2.aruco as aruco
 from GetEnemyPixCoords import GetEnemy
 
 ge = GetEnemy()
-# ge.display()
+ge.display()
 
 while True:
     updated, min_id, distance = ge.getClosestEnemy()
