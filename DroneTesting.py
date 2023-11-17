@@ -1,8 +1,7 @@
-import cv2
-import numpy as np
 from dronekit import connect, VehicleMode, LocationGlobal, LocationGlobalRelative
 import dronekit_sitl
 import time
+from GetEnemies import GetEnemy
 
 # Configure SITL environment
 sitl = dronekit_sitl.start_default()
@@ -39,10 +38,10 @@ def takeoffDrone(targetAltitude):
     vehicle.simple_takeoff(targetAltitude) # Take off to target altitude
 
     # Wait until the vehicle reaches a safe height before processing the goto (otherwise the command
-    #  after Vehicle.simple_takeoff will execute immediately).
+    # after Vehicle.simple_takeoff will execute immediately).
     while True:
         print(" Altitude: ", vehicle.location.global_relative_frame.alt)
-        #Break and return from function just below target altitude.
+        # Break and return from function just below target altitude.
         if vehicle.location.global_relative_frame.alt >= targetAltitude * 0.95:
             print("Reached target altitude")
             break
@@ -57,16 +56,6 @@ def goto_location(lat, lon, alt):
         distance = current_location.distance_to(target_location)
         if distance < 1:  # Adjust this threshold as needed
             break
-
-# Placeholder for ArUco marker detection
-def detect_aruco_markers(image):
-    # Define the ArUco dictionary and parameters
-    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-    parameters = cv2.aruco.DetectorParameters_create()
-
-    # Detect ArUco markers in the image
-    corners, ids, _ = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
-    return corners, ids
 
 # Used to begin searching process for challenge 1
 def challenge1Search():
@@ -85,25 +74,28 @@ def challenge1Search():
     drone_x = 0
     drone_y = 0
 
+    # Create instance of GetEnemy class for market detection
+    aruco_detector = GetEnemy()
+    aruco_detector.__init__()
+
+    # Main loop for the search
     while True:
         # Move the drone to the current grid cell
         goto_location(drone_x, drone_y, 10)  # Assuming altitude of 10 meters
 
-        # Capture an image from the drone's camera
-        # needs to be added
+        # Detect ArUco markers in the captured image using the GetEnemy class
+        updated, closest_enemy_id, min_enemy_distance = aruco_detector.getClosestEnemy()
 
-        # Detect ArUco markers in the captured image
-        corners, ids = detect_aruco_markers(frame)
+        if updated and closest_enemy_id is not None:
+            # Move the drone to the location of the closest enemy ArUco marker
+            vector_x, vector_y = aruco_detector.getVectorToMarker(closest_enemy_id)
+            goto_location(drone_x + vector_x, drone_y + vector_y, 10)  # Move to marker location
 
-        # Store detected ArUco markers and their positions
-        if ids is not None:
-            for i in range(len(ids)):
-                marker_id = ids[i][0]
-                marker_corners = corners[i][0]
-                # Store marker_id and marker_corners in your data structure
+            # Pause for about 5 seconds at the marker location
+            time.sleep(5)
 
-        # Move the drone approximately 15 yards to the right
-        drone_x += 15  # Adjust this distance as needed
+        # Move the drone along the x-axis
+        drone_x += grid_step_x 
         if drone_x >= field_width:
             # If at the right edge of the field, move forward and reset drone_x
             drone_x = 0
@@ -111,35 +103,14 @@ def challenge1Search():
             if drone_y >= field_height:
                 break  # Break the loop if the end of the field is reached
 
-
-
 '''MAIN'''
 # Connect to the vehicle (in this case SITL simulator)
 vehicle = connect('tcp:127.0.0.1:5760', wait_ready=True)
 
-# Obtain vehicle attributes for testing
-print("Autopilot Firmware version: %s" % vehicle.version)
-print("Autopilot capabilities (supports ftp): %s" % vehicle.capabilities.ftp)
-print("Global Location: %s" % vehicle.location.global_frame)
-print("Global Location (relative altitude): %s" % vehicle.location.global_relative_frame)
-print("Local Location: %s" % vehicle.location.local_frame)    #NED
-print("Attitude: %s" % vehicle.attitude)
-print("Velocity: %s" % vehicle.velocity)
-print("GPS: %s" % vehicle.gps_0)
-print("Groundspeed: %s" % vehicle.groundspeed)
-print("Airspeed: %s" % vehicle.airspeed)
-print("Gimbal status: %s" % vehicle.gimbal)
-print("Battery: %s" % vehicle.battery)
-print("EKF OK?: %s" % vehicle.ekf_ok)
-print("Last Heartbeat: %s" % vehicle.last_heartbeat)
-print("Rangefinder: %s" % vehicle.rangefinder)
-print("Rangefinder distance: %s" % vehicle.rangefinder.distance)
-print("Rangefinder voltage: %s" % vehicle.rangefinder.voltage)
-print("Heading: %s" % vehicle.heading)
-print("Is Armable?: %s" % vehicle.is_armable)
-print("System status: %s" % vehicle.system_status.state)
-print("Mode: %s" % vehicle.mode.name)    # settable
-print("Armed: %s" % vehicle.armed)    # settable
+# Connect to copter for testing
+#print("Connecting to Drone")
+#vehicle = connect('/dev/ttyTHS2', wait_ready=True, baud=1500000)
+#print("Connected")
 
 # Arm the drone
 armDrone()
@@ -149,6 +120,7 @@ takeoffDrone(10)
 
 # Begin challenge 1 search
 challenge1Search()
+print("Challenge 1 Search Complete")
 
 # Close vehicle object when finished running script
 vehicle.mode = VehicleMode("LAND")
