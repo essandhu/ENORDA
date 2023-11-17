@@ -1,12 +1,14 @@
 import cv2
 import cv2.aruco as aruco
+import numpy as np
 
-from GetEnemyPixCoords import GetEnemy
+from GetEnemies import GetEnemy
 
 ge = GetEnemy()
-ge.display()
-
+# ge.display()
+camI = [[np.pi, 0, 0], [0, 0, 0]]
 while True:
-    updated, min_id, distance = ge.getClosestEnemy()
-    print(ge.getVectorToClosestEnemy())
-    # print(ge.getPixCoords()[min_id][0])
+    ge.getGlobalCoordinates(42, camI)
+#     # print(ge.getCameraIntrinsicsForMarker(5)[1][1][0][0])
+#     print(min_id, ge.getCameraIntrinsicsForMarker(min_id))
+# print(ge.getPixCoords()[min_id][0])

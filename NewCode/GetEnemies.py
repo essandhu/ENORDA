@@ -2,6 +2,8 @@
 import cv2
 import cv2.aruco as aruco
 import numpy as np
+from scipy.spatial.transform import Rotation
+
 
 class GetEnemy:
     # The dimensions of the camera
@@ -30,16 +32,43 @@ class GetEnemy:
     # [[x0, y0], [x1, y1], [x2, y2], [x3, y3]]
     pixCoords = {}
 
-    #This is the width of the aruco marker in meters.
+    camCoordinates = {}
+
+    globalCoords = {}
+
+    # This is the width of the aruco marker in meters.
     markerWidth = None
 
-    cameraMatrix = np.array([[522.40309943, 0., 311.44490428], [0., 524.46457779, 239.11265117], [0., 0., 1.]])
-    
-    distortionCoef = np.array([[-0.10218976, 0.84197709, -0.00646081, 0.01162686, -0.28063381]])
+    # Use camera calibration program to get the cameraMatrix and the distortionCoef.
+    cameraMatrix = np.array(
+        [
+            [488.5543657500014, 0.0, 321.65358759427664],
+            [0.0, 487.43921741602617, 256.6200480801573],
+            [0.0, 0.0, 1.0],
+        ]
+    )
 
+    distortionCoef = np.array(
+        [
+            [
+                0.16451478315760962,
+                0.1014723358993245,
+                0.006546874592421496,
+                0.009647224242869689,
+                -1.271225641680035,
+            ]
+        ]
+    )
 
-
-    def __init__(self, camIndex=0, goodGuys=[18, 5], dictionary=aruco.DICT_4X4_50, markerWidth = 0.0508):
+    def __init__(
+        self,
+        camIndex=0,
+        goodGuys=[18, 5],
+        dictionary=aruco.DICT_4X4_50,
+        markerWidth=0.0508,
+        cameraMatrix=None,
+        distortionCoef=None,
+    ):
         # Start the video stream
         self.cap = cv2.VideoCapture(camIndex)
 
@@ -56,10 +85,17 @@ class GetEnemy:
 
         # Set the aruco marker dictionary
         self.aruco_dict = aruco.getPredefinedDictionary(dictionary)
-        
-        #Set the width of the aruco marker
+
+        # Set the width of the aruco marker
         self.markerWidth = markerWidth
 
+        # Set the cameraMatrix
+        if cameraMatrix != None:
+            self.cameraMatrix = cameraMatrix
+
+        # Set the distortionCoef
+        if distortionCoef != None:
+            self.distortionCoef = distortionCoef
 
     # display will show the camera and mark all the aruco markers and label them with the ID.
     # this should only be used for testing.
@@ -83,8 +119,10 @@ class GetEnemy:
             aruco.drawDetectedMarkers(frame, corners, ids)
             cv2.imshow("ArUco Marker Detection", frame)
             if ids is not None:
-                rvec, tvec, _ = aruco.estimatePoseSingleMarkers(corners, self.markerWidth, self.cameraMatrix, self.distortionCoef)
-                print("NEW!!!!!!!!!!!!!!!!!!!!!!!")
+                rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
+                    corners, self.markerWidth, self.cameraMatrix, self.distortionCoef
+                )
+                print("Camera Intrinsics")
                 print(tvec)
 
             # Press escape to exit.
@@ -107,12 +145,18 @@ class GetEnemy:
         corners, ids, rejected = aruco.detectMarkers(
             gray, self.aruco_dict, parameters=self.aruco_parameters
         )
+
         if ids is not None:
             # Reset pixCoords
             self.pixCoords = {}
+            self.camCoordinates = {}
+            self.globalCoords = {}
             # Search through each aruco marker and store it in pixCoords
             for i in range(len(ids)):
                 self.pixCoords[ids[i][0]] = corners[i][0]
+                self.camCoordinates[ids[i][0]] = aruco.estimatePoseSingleMarkers(
+                    corners[i], self.markerWidth, self.cameraMatrix, self.distortionCoef
+                )
             return True
         # If no markers were found return False to indicate there was no update.
         return False
@@ -134,7 +178,7 @@ class GetEnemy:
         return updated, enemies
 
     # getClosestEnemy finds the enemy marker that is the closest to the center of the camera.
-    def getClosestEnemy(self):
+    def getClosestEnemy2D(self):
         # find all the enemy markers.
         updated, enemies = self.getEnemies()
         # This will store the enemy ID's as the key and the distance of the enemy to the center to the camera as the item.
@@ -153,6 +197,16 @@ class GetEnemy:
         # If no enemy was found return the following.
         return updated, None, None
 
+    def getClosestEnemy(self):
+        updated, enemies = self.getEnemies()
+        enemiesDist = {}
+        for e in enemies:
+            enemiesDist[e] = self.getDist(self.camCoordinates[e])
+        if len(enemiesDist.items()) > 0:
+            min_id, _ = min(enemiesDist.items(), key=lambda item: item[1])
+            return updated, min_id, enemiesDist
+        return updated, None, enemiesDist
+
     # getVectorToMarker returns the x and y values from the center of the camera to the center of the aruco marker box.
     def getVectorToMarker(self, markerID):
         if markerID != None:
@@ -165,9 +219,42 @@ class GetEnemy:
         # If an empty marker was submitted return the following.
         return None, None
 
+    def getCameraCoordinatesForMarker(self, enemyID):
+        updated = self.getMarkers()
+        return updated, self.camCoordinates.get(enemyID, None)
+
+    def getClosestEnemyCameraCoordinates(self):
+        updated, enemyID, _ = self.getClosestEnemy()
+        return updated, self.camCoordinates.get(enemyID, None)
+
+    def getGlobalCoordinates(self, ID, camIntrinsics):
+        # print(camIntrinsics[0])
+        # camIntrinsics[0][0] += np.pi
+        updated, objCoord = self.getCameraCoordinatesForMarker(ID)
+        if objCoord != None:
+            rvec = objCoord[0][0][0]
+            tvec = objCoord[1][0][0]
+
+            globalCoord = (
+                np.dot(Rotation.from_rotvec(camIntrinsics[0]).as_matrix(), tvec)
+                + camIntrinsics[1]
+            )
+            # print("test")
+            # if globalCoord[2] > 0:
+            #     print("ZZZ")
+            # else:
+            #     print("---")
+            print(globalCoord)
+            # globalCoord = np.dot(camIntrinsics[0], tvec)+camIntrinsics[1]
+            # orientation = np.dot(camIntrinsics[0], rvec)
+            # return updated, globalCoord, orientation
+
+    # def rotationMatrix(self, rotationVector):
+    #     rotation = Rotation.from_rotvec(rotation_vector)
+
     # getVectorToClosestEnemy returns a boolean variable indicating if pixCoords was updated.
     # getVectorToClosestEnemy then returns the vector from the center of the camera to the center of the box in the for of a list containing x, y.
-    def getVectorToClosestEnemy(self):
+    def get2DVectorToClosestEnemy(self):
         # get the ID of the closest enemy.
         updated, enemyID, _ = self.getClosestEnemy()
         # return the boolean updated and the x, y values for the vector.
@@ -182,6 +269,13 @@ class GetEnemy:
         return ((boxCenterX - self.midX) ** 2 + (boxCenterY - self.midY) ** 2) ** (
             1 / 2
         )
+
+    def getDist(self, intrinsics):
+        return (
+            (intrinsics[1][0][0][0] ** 2)
+            + (intrinsics[1][0][0][1] ** 2)
+            + (intrinsics[1][0][0][2] ** 2)
+        ) ** 0.5
 
     def getPixCoords(self):
         return self.pixCoords
