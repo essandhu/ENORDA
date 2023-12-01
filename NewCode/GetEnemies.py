@@ -168,9 +168,9 @@ class GetEnemy:
         # update pixCoords with the marker location
         updated = self.getMarkers()
 
+        enemies = []
         # if any markers are found in pixCoords continue.
         if self.pixCoords is not None:
-            enemies = []
             # Search through each aruco marker if it is not one of our own store the IDs in the enemies list.
             for k in self.pixCoords.keys():
                 if k not in self.goodGuys:

@@ -1,0 +1,7 @@
+asyncio
+utm
+numpy 
+cv2
+scipy
+pydantic 
+json_numpy

@@ -1,0 +1,21 @@
+Main:
+    connect()
+    arm_drone()
+    hashmap_store = {}
+    for every enemy:
+        hashmap_store[enemy] = enemy.cords()
+    while hashmap_store:
+        enemy = choose_an_enemy # Probably with get closest enemy or a min spanning tree
+        while camera_not_on_enemy:
+            reach_enemy(enemy)
+
+        activate_enemy_tracking_movement # we need to track the vehicle's velocity
+        release_payload()
+        if enemy_not_hit(enemy):
+            adjust()
+            release_payload()   #maybe there should be a limit to this
+        if enemy_hit(enemy):
+            hashmap_store.remove(enemy)
+    #repeat
+    return_to_default_mode()
+    land()
