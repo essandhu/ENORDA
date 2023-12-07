@@ -2,6 +2,8 @@ from dronekit import connect, VehicleMode, LocationGlobal, LocationGlobalRelativ
 import numpy as np
 import time
 import argparse
+import sys
+from geopy.distance import geodesic # For calculating distance between two GPS coordinates
 from pymavlink import mavutil
 from GetEnemies import GetEnemy
 
@@ -12,7 +14,6 @@ def connectMyCopter():
     args = parser.parse_args()
 
     connection_string = args.connect  # Gives value after --connect; the IP address
-
     if not connection_string:  # If the connection string is empty; none provided
         # Create a SITL drone instance instead of launching one beforehand
         import dronekit_sitl
@@ -23,7 +24,7 @@ def connectMyCopter():
     return vehicle
 
 # Used to arm the drone
-def armDrone():
+def arm_drone(vehicle):
     while vehicle.is_armable == False:  # While the drone hasn't been armed
         print("Waiting for drone to become armable")
         time.sleep(1)  # Wait one second before checking if drone is armable
@@ -48,7 +49,7 @@ def armDrone():
     print("Copter GPS Ready")
 
 # Used to take off the drone to a specific altitude
-def takeoffDrone(targetAltitude):
+def takeoff_drone(vehicle, targetAltitude):
     print("Taking off!")
     vehicle.simple_takeoff(targetAltitude) # Take off to target altitude
 
@@ -62,8 +63,23 @@ def takeoffDrone(targetAltitude):
             break
         time.sleep(1)
 
+# Used to land the drone, prints height every second while descending
+def land_drone(vehicle):
+    print("Setting copter into LAND mode")
+    vehicle.mode = VehicleMode('LAND')
+    while vehicle.mode != 'LAND':
+        time.sleep(1)
+    print("Initiating landing now...")
+
+    while vehicle.armed:  # While the drone has not landed
+        currDroneHeight = vehicle.location.global_relative_frame.alt
+        print("Current drone elevation: ", currDroneHeight)
+        time.sleep(1)
+	
+    print("The copter has landed!")
+
 # Function to move the drone to a specific location (global relative)
-def goto_location(lat, lon, alt):
+def goto_location(vehicle, lat, lon, alt):
     target_location = LocationGlobalRelative(lat, lon, alt)
     vehicle.simple_goto(target_location)
     while True:
@@ -72,28 +88,66 @@ def goto_location(lat, lon, alt):
         if distance < 1:  # Adjust this threshold as needed
             break
 
+"""
+    Read bounding box coordinates from a CSV file.
+    Args:
+        file_path (str): Path to the CSV file containing bounding box coordinates.
+
+    Returns:
+        list: Bounding box coordinates as a list [lon_min, lat_min, lon_max, lat_max].
+    """
+def read_bbox_from_csv(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+        bbox = [float(coordinate) for coordinate in lines[0].strip().split(',')]
+        return bbox
+
+"""
+Calculate a grid within the bounding box with specified minimum distances between rows and columns.
+Args:
+    bbox (list): List of 4 coordinates defining the bounding box [lon_min, lat_min, lon_max, lat_max].
+    min_row_dist (float): Minimum distance in meters between rows.
+    min_column_dist (float): Minimum distance in meters between columns.
+
+Returns:
+    grid_points: Array of waypoints representing the grid points within the bounding box.
+"""
+def calculate_search_grid(bbox, min_row_dist, min_column_dist):
+    # Determine grid parameters based on input waypoints
+    lon_min, lat_min, lon_max, lat_max = bbox
+    total_width = geodesic((lat_min, lon_min), (lat_min, lon_max)).meters
+    total_height = geodesic((lat_min, lon_min), (lat_max, lon_min)).meters
+    num_rows = int(total_height // min_row_dist) + 1
+    num_columns = int(total_width // min_column_dist) + 1
+    grid_points = np.zeros((num_rows * num_columns, 2))
+
+    # Calculate grid points
+    for row in range(num_rows):
+        for col in range(num_columns):
+            lat = lat_min + (row * min_row_dist / 111111)
+            lon = lon_min + (col * min_column_dist / (111111 * np.cos(np.radians(lat))))
+            grid_points[row * num_columns + col] = [lat, lon]
+
+    return grid_points
+
 # Used to begin searching process for challenge 1
-def challenge1Search():
+def challenge1Search(vehicle):
     print("Starting Challenge 1 Search")
 
-    # Define field dimensions (in yards)
-    field_width = 50
-    field_height = 50
+    # Path to CSV file containing bounding box coordinates
+    input_file = sys.argv[1] 
 
-    # Define grid parameters
-    grid_size = 5  # Divide the field into a 5x5 grid
-    grid_step_x = field_width / grid_size
-    grid_step_y = field_height / grid_size
+    # Read bounding box coordinates from the CSV file
+    bbox = read_bbox_from_csv(input_file)
 
-    # Get the initial GPS coordinates of the drone
-    initial_latitude = vehicle.location.global_frame.lat
-    initial_longitude = vehicle.location.global_frame.lon
+    # Define the minimum distances between rows and columns (SHOULD BE ADJUSTED BASED ON CHALLENGE AND SEARCH AREA)
+    min_row_dist = 1.25  # Minimum spacing in meters between grid rows
+    min_column_dist = 3  # Minimum spacing in meters between grid columns
 
-    # Initialize the drone's current position in yards
-    drone_x = 0
-    drone_y = 0
+    # Calculate the search grid
+    grid_points = calculate_search_grid(bbox, min_row_dist, min_column_dist)
 
-    # Create instance of GetEnemy class for market detection
+    # Create instance of GetEnemy class for marker detection
     aruco_detector = GetEnemy()
     aruco_detector.__init__()
 
@@ -101,9 +155,10 @@ def challenge1Search():
     detected_markers = set()
 
     # Main loop for the search
-    while True:
+    for point in grid_points:
         # Move the drone to the current grid cell
-        goto_location(initial_latitude + (drone_x / 1.0936 / 111111), initial_longitude + (drone_y / (1.0936 / np.cos(np.radians(initial_latitude))) / 111111), 6)  # Assuming altitude of 6 meters
+        lat, lon = point
+        goto_location(vehicle, lat, lon, 7)  # Assuming an altitude of 7 meters
 
         # Detect ArUco markers in the captured image using the GetEnemy class
         updated, closest_enemy_id, min_enemy_distance = aruco_detector.getClosestEnemy()
@@ -112,24 +167,22 @@ def challenge1Search():
         if updated and closest_enemy_id is not None:
             # Check if the marker has not alrady been detected in the current session
             if closest_enemy_id not in detected_markers:
+                # Log the detected marker
+                print("Detected marker with ID: ", closest_enemy_id, " at distance: ", min_enemy_distance, " meters")
+
                 # Move the drone to the location of the closest enemy ArUco marker
                 vector_x, vector_y = aruco_detector.getVectorToMarker(closest_enemy_id)
-                goto_location(drone_x + vector_x, drone_y + vector_y, 4) 
+                goto_location(lon + vector_x, lat + vector_y, 4) 
 
                 # Pause for about 5 seconds at the marker location (for water blast)
                 time.sleep(5)
 
+                # Check for hit on ground vehicle
+                    # if hit: log successful hit and continue search
+                    # else: wait a few seconds and try again
+
                 # Add the marker to the set of detected markers for this session
                 detected_markers.add(closest_enemy_id)
-
-        # Move the drone along the x-axis
-        drone_x += grid_step_x 
-        if drone_x >= field_width:
-            # If at the right edge of the field, move forward and reset drone_x
-            drone_x = 0
-            drone_y += grid_step_y
-            if drone_y >= field_height:
-                break  # Break the loop if the end of the field is reached
 
     # Close the camera
     aruco_detector.close()
@@ -137,23 +190,22 @@ def challenge1Search():
 '''MAIN'''
 # Connect to the vehiclem (simulator)
 #vehicle = connect('tcp:127.0.0.1:5760', wait_ready=True)
-#vehicle = connect('/dev/ttyTHS2', wait_ready=True, baud=1500000)
 
 # Connect to copter for testing
 print("Connecting to Drone")
-vehicle = connectMyCopter()
+copter = connect('/dev/ttyAMA0', wait_ready=True, baud=57600)
 print("Connected!")
 
 # Arm the drone
-armDrone()
+arm_drone(copter)
 
-# Take off to 6m
-takeoffDrone(6)
+# Take off to 7m
+takeoff_drone(copter, 7)
 
 # Begin challenge 1 search
-challenge1Search()
+challenge1Search(copter)
 print("Challenge 1 Search Complete")
 
 # Close vehicle object when finished running script
-vehicle.mode = VehicleMode("LAND")
-vehicle.close()
+land_drone(copter)
+copter.close()
