@@ -65,16 +65,21 @@ class GetEnemy:
     lastVelocity = {}
 
     # Use camera calibration program to get the cameraMatrix and the distortionCoef.
-    cameraMatrix = np.array([[544.2900538666688, 0.0, 318.2822285358641], [0.0, 545.8874796323947, 254.04757006428002], [0.0, 0.0, 1.0]])
-
-    distortionCoef = np.array([[-0.29295405447282924, 3.71618606448295, 0.0021801641569121222, 0.012314010977921836, -12.551057852648873]])
+    # For my laptop
+    # cameraMatrix = np.array([[544.2900538666688, 0.0, 318.2822285358641], [0.0, 545.8874796323947, 254.04757006428002], [0.0, 0.0, 1.0]])
+    # For the drone
+    cameraMatrix = np.array([[1087.295120358312, 0.0, 672.5803974446591], [0.0, 904.9501417964135, 152.10434756756268], [0.0, 0.0, 1.0]])
+    # For my laptop
+    # distortionCoef = np.array([[-0.29295405447282924, 3.71618606448295, 0.0021801641569121222, 0.012314010977921836, -12.551057852648873]])
+    # For the Drone
+    distortionCoef = np.array([[0.8828484612711133, 2.1668104320308754, -0.25913938950617754, -0.2070873886137139, -53.533897089498666]])
 
     def __init__(
         self,
         camIndex=0,
         goodGuys=[18, 5],
-        dictionary=aruco.DICT_4X4_50,
-        markerWidth=0.0508,
+        dictionary=aruco.DICT_6X6_50,
+        markerWidth=0.3,
         cameraMatrix=None,
         distortionCoef=None,
     ):
@@ -131,16 +136,16 @@ class GetEnemy:
                 rvec, tvec, _ = aruco.estimatePoseSingleMarkers(
                     corners, self.markerWidth, self.cameraMatrix, self.distortionCoef
                 )
-                camI = [[np.pi, 0, 0], [0, 0, 0]]
-                _, id, coord = self.getClosestEnemyGlobal(camI)
-                _, speed, vel, _ = self.getVelocity(id, camI)
+                camE = [[np.pi, 0, 0], [0, 0, 0]]
+                _, id, coord = self.getClosestEnemyGlobal(camE)
+                _, speed, vel, _ = self.getVelocity(id, camE)
                 if speed != None and speed > 0.1:
                     print("\nMarker ID")
                     print(id)
-                    print("Camera Intrinsics in Meters")
+                    print("Global Coordinates in Meters")
                     print(coord)
                     print("Speed and Velocity")
-                    print(speed, "m/s", vel)
+                    print(speed, "m/s ", vel)
 
             # Press escape to exit.
             if cv2.waitKey(1) & 0xFF == 27:
@@ -166,10 +171,6 @@ class GetEnemy:
         if ids is not None:
             for i in self.updates:
                 self.updates[i] = False
-            # Reset pixCoords
-            self.pixCoords = {}
-            self.camCoordinates = {}
-            self.globalCoords = {}
             # Search through each aruco marker and store it in pixCoords
             for i in range(len(ids)):
                 self.updates[ids[i][0]] = True
@@ -246,15 +247,15 @@ class GetEnemy:
     
 
     # getClosestEnemyGlobal finds the enemy marker that is the closest to the center camera using the coordinates relative to the camera and returns the global coordinates of the marker.
-    # getClosestEnemyGlobal requires a parameter including the camera intrinsics.
-    # The first element in the camIntrinsics list should be the orientation of the camera in radians.
-    # The second element in the camIntrinsics list should be the location of the camera in meters.
+    # getClosestEnemyGlobal requires a parameter including the camera extrinsic.
+    # The first element in the camExtrinsic list should be the orientation of the camera in radians.
+    # The second element in the camExtrinsic list should be the location of the camera in meters.
     # The first element returned is a boolean variable to indicate if the location of the marker was updated.
     # The second element returned is the id of the closest aruco marker.
     # The third element returned is the global coordinates of the closest aruco marker.
-    def getClosestEnemyGlobal(self, camI):
+    def getClosestEnemyGlobal(self, camE):
         updated, id, _, _ = self.getClosestEnemy()
-        _, coord = self.getGlobalCoordinates(id, camI)
+        _, coord = self.getGlobalCoordinates(id, camE)
         return updated, id, coord
 
     # getPixVectorToMarker returns the x and y values from the center of the camera to the center of the aruco marker box based on the pixel coordinates.
@@ -283,11 +284,11 @@ class GetEnemy:
     # getGlobalCoordinates is returns the global coordinates of an aruco marker.
     # The id of the marker is required for the first parameter.
     # The camera intrisics are required in the form of a list for the second parameter.
-    # The first element in the camIntrinsics list should be the orientation of the camera in radians.
-    # The second element in the camIntrinsics list should be the location of the camera in meters.
+    # The first element in the camExtrinsic list should be the orientation of the camera in radians.
+    # The second element in the camExtrinsic list should be the location of the camera in meters.
     # The first element returned is a boolean variable to indicate if the location of the marker was updated.
     # The second element returned is a list containing the global location of the marker in meters.
-    def getGlobalCoordinates(self, ID, camIntrinsics):
+    def getGlobalCoordinates(self, ID, camExtrinsic):
         # Check the camera and get the camera coordinates of the for the marker.
         updated, objCoord = self.getCameraCoordinatesForMarker(ID)
 
@@ -298,8 +299,8 @@ class GetEnemy:
 
             #Get the global coordinates of the marker using the formula RX + t
             globalCoord = (
-                np.dot(Rotation.from_rotvec(camIntrinsics[0]).as_matrix(), X)
-                + camIntrinsics[1]
+                np.dot(Rotation.from_rotvec(camExtrinsic[0]).as_matrix(), X)
+                + camExtrinsic[1]
             )
             return updated, globalCoord
         return None, None
@@ -315,15 +316,15 @@ class GetEnemy:
     # getVelocity gets the speed and velocity of an aruco marker.
     # An id of the marker is required for the first parameter.
     # The camera intrisics are required in the form of a list for the second parameter.
-    # The first element in the camIntrinsics list should be the orientation of the camera in radians.
-    # The second element in the camIntrinsics list should be the location of the camera in meters.
+    # The first element in the camExtrinsic list should be the orientation of the camera in radians.
+    # The second element in the camExtrinsic list should be the location of the camera in meters.
     # The first element returned is a boolean variable to indicate if the location of the marker was updated.
     # The second element returned is the magnitude of the velocity.
     # The third element returned is the velocity in m/s.
     # The final element returned is the delta time in seconds.
-    def getVelocity(self, ID, camIntrinsics):
+    def getVelocity(self, ID, camExtrinsic):
         # Get the global coordinates of the marker.
-        updated, newCoord = self.getGlobalCoordinates(ID, camIntrinsics)
+        updated, newCoord = self.getGlobalCoordinates(ID, camExtrinsic)
         # If the velocity of the marker has not already been recorded store the time and coordinates of the marker in the lastVelocity dictionary.
         if ID not in self.lastVelocity:
             if updated != None:
@@ -357,18 +358,18 @@ class GetEnemy:
     # The actual delta time may be larger than the requested delta time based on the amount time it takes to make the calculation.
     # An id of the marker is required for the first parameter.
     # The camera intrisics are required in the form of a list for the second parameter.
-    # The first element in the camIntrinsics list should be the orientation of the camera in radians.
-    # The second element in the camIntrinsics list should be the location of the camera in meters.
+    # The first element in the camExtrinsic list should be the orientation of the camera in radians.
+    # The second element in the camExtrinsic list should be the location of the camera in meters.
     # The final parameter is the specified amount of time that should pass between the first location being noted and the last location being noted for calculating the velocity.
     # The first element returned is a boolean variable to indicate if the location of the marker was updated.
     # The second element returned is the magnitude of the velocity.
     # The third element returned is the velocity in m/s.
     # The final element returned is the delta time in seconds.
-    def getVelTimer(self, ID, camIntrinsics, timer):
+    def getVelTimer(self, ID, camExtrinsic, timer):
         while ID not in self.lastVelocity:
-            _, _, _, _  = self.getVelocity(ID, camIntrinsics)
+            _, _, _, _  = self.getVelocity(ID, camExtrinsic)
         time.sleep(timer)
-        return self.getVelocity(ID, camIntrinsics)
+        return self.getVelocity(ID, camExtrinsic)
 
     # pixDist returns the distance from the center of the camera to the center of the aruco box.
     def pixDist(self, corners):
@@ -381,11 +382,11 @@ class GetEnemy:
         )
     
     # This calculates the magnitude of a 3D vetor.
-    def getDist(self, intrinsics):
+    def getDist(self, extrinsic):
         return (
-            (intrinsics[1][0][0][0] ** 2)
-            + (intrinsics[1][0][0][1] ** 2)
-            + (intrinsics[1][0][0][2] ** 2)
+            (extrinsic[1][0][0][0] ** 2)
+            + (extrinsic[1][0][0][1] ** 2)
+            + (extrinsic[1][0][0][2] ** 2)
         ) ** 0.5
 
     # This returns the pixel coordinates.

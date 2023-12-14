@@ -1,13 +1,15 @@
+#This is a junk program to test the computer vision programs
+
 import cv2
 import cv2.aruco as aruco
 import numpy as np
 
 # from GetEnemies import GetEnemy
-from GetEnemyPixCoords import GetEnemy
+from GetEnemies import GetEnemy
 
 ge = GetEnemy()
 ge.display()
-camI = [[np.pi, 0, 0], [0, 0, 0]]
+# camI = [[np.pi, 0, 0], [0, 0, 0]]
 # while True:
     # _, id, coord = ge.getClosestEnemyGlobal(camI)
     # _, speed, vel, _ = ge.getVelocity(42, camI)

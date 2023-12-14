@@ -1,5 +1,7 @@
 #####################################################################################
 #                This program is used to calibrate the drones camera                #
+# This will probably not work on the drone but it can be run on a laptop running the#
+# latest python3 version                                                            #
 #               Run this program before using the GetEnemies program                #
 #     Hold the provided 7x10 checker board in front of the camera and hold it at    #
 #     different positions and orientations                                          #
@@ -39,6 +41,7 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Find the chessboard corners
+    print("ready")
     ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
 
     # If the chessboard was found proceed
