@@ -7,6 +7,8 @@
 #     different positions and orientations                                          #
 #  Copy the printed results and initialize the  cameraMatrix and distortionCoef     # 
 #  variables in the GetEnemies program with the copied results.                     #
+#   This program will not run on the Jetson. Instead connect the drone camera to a  #
+#   laptop and run the program.                                                     #
 #####################################################################################
 
 
@@ -41,7 +43,6 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     # Find the chessboard corners
-    print("ready")
     ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
 
     # If the chessboard was found proceed
